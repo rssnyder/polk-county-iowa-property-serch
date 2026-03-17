@@ -1,8 +1,10 @@
 # polk county iowa property serch
 
-the polk county assessor page is a favorite of mine
+live: https://polkproperties.ttdsm.org/
 
-there was an [axios article](https://discord.com/channels/905606844876206080/910557874403541043/1483461836056559719) talking about how the engineer who maintains it is retiring so they expect a site blackout while they work on getting a contract to rebuild it
+the polk county assesor page is a favorite of mine
+
+there was an [axios article](https://www.axios.com/local/des-moines/2026/03/17/polk-assessor-website-key-search-function-county) talking about how the engineer who maintains it is retiring so they expect a site blackout while they work on getting a contract to rebuild it
 
 we extracted the information available for download in csv format, loaded the parcel records into a table and the sale records into another
 
@@ -12,3 +14,6 @@ you can pull the raw CSV files from the county here:
 or my combined residential, commercial, and agricultural records with sales database:
 - https://s3.rileysnyder.dev/public/polk/db/polk_county.db
  
+running: `./webapp/polksearch -addr 0.0.0.0:8080 -db polk_county_3-15-2026.db -end-date "March 15, 2026"`
+
+credit to the techtalkdsm discord server
