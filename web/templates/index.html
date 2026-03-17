@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Polk County Property Search</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        h1 { color: #333; }
+        .search-box {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            font-size: 16px;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+        input[type="text"]:focus { border-color: #007bff; outline: none; }
+        button {
+            background: #007bff;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        button:hover { background: #0056b3; }
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .card h2 { margin-top: 0; color: #333; border-bottom: 2px solid #007bff; padding-bottom: 10px; }
+        .property-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+        .property-item label { font-size: 12px; color: #666; text-transform: uppercase; }
+        .property-item .value { font-size: 18px; font-weight: 500; color: #333; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { text-align: left; padding: 12px; border-bottom: 1px solid #eee; }
+        th { background: #f8f9fa; font-size: 12px; text-transform: uppercase; color: #666; }
+        tr:hover { background: #f8f9fa; }
+        .price { font-weight: 600; color: #28a745; }
+        .error { color: #dc3545; padding: 20px; background: #f8d7da; border-radius: 4px; }
+        .hint { font-size: 14px; color: #666; margin-top: 5px; }
+        footer { margin-top: 40px; padding: 20px; text-align: center; color: #666; font-size: 14px; }
+    </style>
+</head>
+<body>
+    <h1>Polk County Property Search</h1>
+
+    <div class="search-box">
+        <form method="get" action="/">
+            <input type="text" name="q" placeholder="Search by address, parcel ID, or owner name..." value="{{.Query}}" autofocus>
+            <button type="submit">Search</button>
+            <p class="hint">Examples: "123 MAIN ST", "01001234567000", "SMITH"</p>
+        </form>
+    </div>
+
+    {{if .Error}}
+    <div class="error">{{.Error}}</div>
+    {{end}}
+
+    {{if .Property}}
+    <div class="card">
+        <h2>{{.Property.Address}}, {{.Property.City}}, {{.Property.State}} {{.Property.Zip}}</h2>
+        <div class="property-grid">
+            <div class="property-item">
+                <label>Parcel ID</label>
+                <div class="value">{{.Property.DP}}</div>
+            </div>
+            <div class="property-item">
+                <label>Class</label>
+                <div class="value">{{.Property.ClassDescr}}</div>
+            </div>
+            <div class="property-item">
+                <label>Assessed Value</label>
+                <div class="value">{{formatPrice .Property.TotalFull}}</div>
+            </div>
+            <div class="property-item">
+                <label>Land Value</label>
+                <div class="value">{{formatPrice .Property.LandFull}}</div>
+            </div>
+            <div class="property-item">
+                <label>Building Value</label>
+                <div class="value">{{formatPrice .Property.BldgFull}}</div>
+            </div>
+            <div class="property-item">
+                <label>Living Area</label>
+                <div class="value">{{.Property.TotalLivingArea}} sq ft</div>
+            </div>
+            <div class="property-item">
+                <label>Bedrooms</label>
+                <div class="value">{{.Property.Bedrooms}}</div>
+            </div>
+            <div class="property-item">
+                <label>Bathrooms</label>
+                <div class="value">{{.Property.Bathrooms}}</div>
+            </div>
+            <div class="property-item">
+                <label>Year Built</label>
+                <div class="value">{{.Property.YearBuilt}}</div>
+            </div>
+            <div class="property-item">
+                <label>Condition</label>
+                <div class="value">{{.Property.Condition}}</div>
+            </div>
+            <div class="property-item">
+                <label>Grade</label>
+                <div class="value">{{.Property.Grade}}</div>
+            </div>
+            <div class="property-item">
+                <label>School District</label>
+                <div class="value">{{.Property.SchoolDistrict}}</div>
+            </div>
+            <div class="property-item">
+                <label>Owner</label>
+                <div class="value">{{.Property.TitleHolder1}}</div>
+            </div>
+            {{if .Property.TitleHolder2}}
+            <div class="property-item">
+                <label>Owner 2</label>
+                <div class="value">{{.Property.TitleHolder2}}</div>
+            </div>
+            {{end}}
+            <div class="property-item">
+                <label>Acres</label>
+                <div class="value">{{printf "%.3f" .Property.LandAcres}}</div>
+            </div>
+        </div>
+    </div>
+
+    {{if .Sales}}
+    <div class="card">
+        <h2>Sale History</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Price</th>
+                    <th>Seller</th>
+                    <th>Buyer</th>
+                    <th>Quality</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Sales}}
+                <tr>
+                    <td>{{.SaleDate}}</td>
+                    <td class="price">{{formatPrice .Price}}</td>
+                    <td>{{.Seller}}</td>
+                    <td>{{.Buyer}}</td>
+                    <td>{{.AnalysisQuality}}</td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+    {{else}}
+    <div class="card">
+        <h2>Sale History</h2>
+        <p>No sales records found for this property.</p>
+    </div>
+    {{end}}
+    {{end}}
+
+    <footer>
+        <p>Data includes records from 1990 to {{.EndDate}}</p>
+    </footer>
+</body>
+</html>
