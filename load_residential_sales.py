@@ -1,9 +1,30 @@
 #!/usr/bin/env python3
+"""
+Load residential sales data from CSV into SQLite.
+Supports incremental updates via INSERT OR REPLACE on (dp, sale_date, book, pg).
+
+Usage: python3 load_residential_sales.py [csv_dir] [db_file]
+  Defaults: raw/res/*.csv (year files) -> polk_county.db
+"""
 import csv
 import sqlite3
 import glob
+import sys
 
-conn = sqlite3.connect('polk_county.db')
+# Default paths
+CSV_DIR = 'raw/res'
+DB_PATH = 'polk_county.db'
+
+# Allow command line overrides
+if len(sys.argv) > 1:
+    CSV_DIR = sys.argv[1]
+if len(sys.argv) > 2:
+    DB_PATH = sys.argv[2]
+
+print(f"Loading from: {CSV_DIR}")
+print(f"Database: {DB_PATH}")
+
+conn = sqlite3.connect(DB_PATH)
 cursor = conn.cursor()
 
 # Create sales table with foreign key to properties
@@ -43,17 +64,22 @@ def parse_int(val):
     if val == '' or val is None:
         return None
     try:
-        return int(val)
+        return int(float(val))
     except ValueError:
         return None
 
 # Find all year CSV files (1990-2026)
-sale_files = sorted(glob.glob('[0-9][0-9][0-9][0-9].csv'))
+sale_files = sorted(glob.glob(f'{CSV_DIR}/[0-9][0-9][0-9][0-9].csv'))
+
+if not sale_files:
+    print(f"No year CSV files found in {CSV_DIR}")
+    sys.exit(1)
+
 total_loaded = 0
 
 for filepath in sale_files:
-    year = filepath.replace('.csv', '')
-    print(f"Loading {filepath}...", end=' ')
+    year = filepath.split('/')[-1].replace('.csv', '')
+    print(f"Loading {filepath}...", end=' ', flush=True)
     count = 0
 
     with open(filepath, 'r', encoding='utf-8') as f:
@@ -98,5 +124,6 @@ for filepath in sale_files:
 
 conn.commit()
 final_count = cursor.execute('SELECT COUNT(*) FROM sales').fetchone()[0]
-print(f"\nTotal: {final_count} sale records loaded")
+print(f"\nLoaded {total_loaded} records")
+print(f"Total residential sales in database: {final_count}")
 conn.close()

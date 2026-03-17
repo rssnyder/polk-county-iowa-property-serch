@@ -1,9 +1,40 @@
 #!/usr/bin/env python3
+"""
+Load residential property data from CSV into SQLite.
+Supports incremental updates via INSERT OR REPLACE on dp (parcel ID).
+
+Usage: python3 load_residential_properties.py [csv_file] [db_file]
+  Defaults: raw/res/POLKCOUNTY_*.csv (not SALES) -> polk_county.db
+"""
 import csv
 import sqlite3
+import glob
+import sys
 
-# Column definitions: (name, type)
-# TEXT columns
+# Default paths
+CSV_PATTERN = 'raw/res/POLKCOUNTY_[0-9]*.csv'
+DB_PATH = 'polk_county.db'
+
+# Allow command line overrides
+if len(sys.argv) > 1:
+    CSV_PATTERN = sys.argv[1]
+if len(sys.argv) > 2:
+    DB_PATH = sys.argv[2]
+
+# Find the CSV file
+csv_files = glob.glob(CSV_PATTERN)
+if not csv_files:
+    if '*' not in CSV_PATTERN and CSV_PATTERN.endswith('.csv'):
+        csv_files = [CSV_PATTERN]
+    else:
+        print(f"No CSV files found matching: {CSV_PATTERN}")
+        sys.exit(1)
+
+csv_file = sorted(csv_files)[-1]
+print(f"Loading from: {csv_file}")
+print(f"Database: {DB_PATH}")
+
+# Column definitions
 text_cols = [
     'jurisdiction', 'nbhd', 'pocket', 'dp', 'gp', 'address_line1', 'address_line2',
     'house', 'house_portion', 'dir', 'street', 'suffix', 'suffix_dir', 'unit_type',
@@ -21,7 +52,6 @@ text_cols = [
     'mail_initial', 'mail_business', 'tif_descr', 'platname', 'legal', 'school_district'
 ]
 
-# INTEGER columns
 int_cols = [
     'land_full', 'bldg_full', 'total_full', 'land_adj', 'bldg_adj', 'total_adj',
     'land_sf', 'percent_brick', 'main_living_area', 'upper_living_area', 'fin_attic_area',
@@ -35,13 +65,12 @@ int_cols = [
     'commercial_area', 'tif'
 ]
 
-# REAL columns
 real_cols = ['land_acres', 'frontage', 'depth', 'x', 'y']
 
-conn = sqlite3.connect('polk_county.db')
+conn = sqlite3.connect(DB_PATH)
 cursor = conn.cursor()
 
-# Build CREATE TABLE statement dynamically
+# Build CREATE TABLE statement
 col_defs = ['id INTEGER PRIMARY KEY AUTOINCREMENT']
 for col in text_cols:
     col_defs.append(f'{col} TEXT')
@@ -50,15 +79,14 @@ for col in int_cols:
 for col in real_cols:
     col_defs.append(f'{col} REAL')
 
-# Create table if not exists, with dp as unique key for upserts
-cursor.execute(f'CREATE TABLE IF NOT EXISTS properties ({", ".join(col_defs)})')
+cursor.execute('CREATE TABLE IF NOT EXISTS properties (' + ', '.join(col_defs) + ')')
 cursor.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_dp ON properties(dp)')
 
 def parse_int(val):
     if val == '' or val is None:
         return None
     try:
-        return int(val)
+        return int(float(val))
     except ValueError:
         return None
 
@@ -72,8 +100,9 @@ def parse_float(val):
 
 all_cols = text_cols + int_cols + real_cols
 
-with open('POLKCOUNTY_3-15-2026.csv', 'r', encoding='utf-8') as f:
+with open(csv_file, 'r', encoding='utf-8') as f:
     reader = csv.DictReader(f)
+    count = 0
 
     for row in reader:
         values = []
@@ -87,8 +116,10 @@ with open('POLKCOUNTY_3-15-2026.csv', 'r', encoding='utf-8') as f:
         placeholders = ', '.join(['?'] * len(all_cols))
         col_names = ', '.join(all_cols)
         cursor.execute(f'INSERT OR REPLACE INTO properties ({col_names}) VALUES ({placeholders})', values)
+        count += 1
 
 conn.commit()
-count = cursor.execute('SELECT COUNT(*) FROM properties').fetchone()[0]
-print(f"Created polk_county.db with {count} property records")
+final_count = cursor.execute('SELECT COUNT(*) FROM properties').fetchone()[0]
+print(f"Loaded {count} records from CSV")
+print(f"Total residential properties in database: {final_count}")
 conn.close()
