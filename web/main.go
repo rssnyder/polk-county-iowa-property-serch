@@ -6,8 +6,10 @@ import (
 	"flag"
 	"fmt"
 	"html/template"
+	"io"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -55,11 +57,11 @@ type Property struct {
 	Nbhd string
 
 	// Address
-	Address  string
-	City     string
-	State    string
-	Zip      string
-	Zip4     string
+	Address string
+	City    string
+	State   string
+	Zip     string
+	Zip4    string
 
 	// Classification
 	Class      string
@@ -97,12 +99,12 @@ type Property struct {
 	ContractBuyer2 string
 
 	// Mailing address
-	MailName    string
-	MailLine1   string
-	MailLine2   string
-	MailCity    string
-	MailState   string
-	MailZip     string
+	MailName  string
+	MailLine1 string
+	MailLine2 string
+	MailCity  string
+	MailState string
+	MailZip   string
 
 	// Building basics
 	YearBuilt    int
@@ -180,10 +182,10 @@ type Property struct {
 	Saunas     int
 
 	// Other residential
-	DetachedStructs    string
+	DetachedStructs     string
 	CommercialOccupancy string
-	CommercialArea     int
-	PercentComplete    int
+	CommercialArea      int
+	PercentComplete     int
 
 	// === COMMERCIAL-SPECIFIC ===
 	OccupancyGroup      string
@@ -200,17 +202,17 @@ type Property struct {
 	NumberUnits         int
 
 	// Commercial building areas
-	GrossArea              int
-	TotalStoryHeight       int
-	GroundFloorArea        int
-	Perimeter              int
-	WallHeight             int
-	FinishedArea           int
-	UnfinishedArea         int
-	MezzanineFinishedArea  int
+	GrossArea               int
+	TotalStoryHeight        int
+	GroundFloorArea         int
+	Perimeter               int
+	WallHeight              int
+	FinishedArea            int
+	UnfinishedArea          int
+	MezzanineFinishedArea   int
 	MezzanineUnfinishedArea int
-	AirCondArea            int
-	SprinkleArea           int
+	AirCondArea             int
+	SprinkleArea            int
 
 	// Commercial basement
 	BsmtUnfinishedArea int
@@ -258,14 +260,54 @@ type PageData struct {
 	HasNext        bool
 }
 
+const bootstrapURL = "https://s3.rileysnyder.dev/public/polk/db/polk_county.db"
+
+func downloadDatabase(destPath string) error {
+	resp, err := http.Get(bootstrapURL)
+	if err != nil {
+		return fmt.Errorf("failed to download: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("download failed with status: %s", resp.Status)
+	}
+
+	out, err := os.Create(destPath)
+	if err != nil {
+		return fmt.Errorf("failed to create file: %w", err)
+	}
+	defer out.Close()
+
+	written, err := io.Copy(out, resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to write file: %w", err)
+	}
+
+	log.Printf("Downloaded %d bytes", written)
+	return nil
+}
+
 func main() {
 	addr := flag.String("addr", "0.0.0.0:8080", "bind address (e.g., localhost:8080)")
 	metricsAddr := flag.String("metrics-addr", ":9090", "metrics server bind address")
 	dbPath := flag.String("db", "polk_county.db", "path to SQLite database")
 	dataEndDate := flag.String("end-date", "2026", "end date for data range shown in footer")
 	searchLogPath := flag.String("log-searches", "", "path to SQLite database for logging search terms (enables search logging)")
+	bootstrap := flag.Bool("bootstrap", false, "download database from remote if it doesn't exist")
 	flag.Parse()
 	endDate = *dataEndDate
+
+	// Bootstrap: download database if it doesn't exist
+	if *bootstrap {
+		if _, err := os.Stat(*dbPath); os.IsNotExist(err) {
+			log.Printf("Database not found at %s, downloading...", *dbPath)
+			if err := downloadDatabase(*dbPath); err != nil {
+				log.Fatalf("Failed to download database: %v", err)
+			}
+			log.Printf("Database downloaded successfully to %s", *dbPath)
+		}
+	}
 
 	var err error
 	db, err = sql.Open("sqlite3", *dbPath)
