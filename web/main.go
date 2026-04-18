@@ -14,9 +14,9 @@ import (
 	"strings"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	_ "modernc.org/sqlite"
 )
 
 //go:embed templates/*
@@ -310,7 +310,7 @@ func main() {
 	}
 
 	var err error
-	db, err = sql.Open("sqlite3", *dbPath)
+	db, err = sql.Open("sqlite", *dbPath)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -318,7 +318,7 @@ func main() {
 
 	// Create search log database if path specified
 	if *searchLogPath != "" {
-		searchLogDB, err = sql.Open("sqlite3", *searchLogPath)
+		searchLogDB, err = sql.Open("sqlite", *searchLogPath)
 		if err != nil {
 			log.Fatalf("ERROR opening search log database: %v", err)
 		}

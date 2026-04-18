@@ -2,3 +2,4 @@
 *.db
 web/polksearch
 raw/*
+dist/*
