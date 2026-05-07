@@ -156,6 +156,58 @@
                 font-size: 12px;
             }
         }
+
+        /* Recently viewed styles */
+        .recent-list { display: flex; flex-wrap: wrap; gap: 10px; }
+        .recent-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 4px;
+            text-decoration: none;
+            color: #333;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        .recent-item:hover { background: #e9ecef; border-color: #007bff; }
+        .recent-item .recent-address { font-weight: 500; }
+        .recent-item .recent-city { color: #666; font-size: 12px; }
+        .recent-clear { font-size: 12px; color: #666; cursor: pointer; margin-left: 10px; font-weight: normal; }
+        .recent-clear:hover { color: #dc3545; }
+
+        /* Bookmark styles */
+        .bookmark-btn {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 0;
+            margin-left: 10px;
+            vertical-align: middle;
+            opacity: 0.7;
+            color: #6c757d;
+            transition: opacity 0.2s, transform 0.2s, color 0.2s;
+        }
+        .bookmark-btn:hover { opacity: 1; transform: scale(1.1); color: #ffc107; }
+        .bookmark-btn.bookmarked { opacity: 1; color: #ffc107; }
+        .bookmarks-section { border-left: 3px solid #ffc107; }
+        .recent-item.bookmarked { border-color: #ffc107; background: #fffdf5; }
+        .recent-item .remove-btn {
+            opacity: 0;
+            background: none;
+            border: none;
+            color: #999;
+            cursor: pointer;
+            padding: 0 0 0 4px;
+            font-size: 16px;
+            transition: opacity 0.2s;
+        }
+        .recent-item:hover .remove-btn { opacity: 1; }
+        .recent-item .remove-btn:hover { color: #dc3545; }
+        .recent-item .remove-btn.confirm { opacity: 1; color: #fff; background: #dc3545; border-radius: 50%; width: 20px; height: 20px; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -177,6 +229,20 @@
             </div>
             <p class="hint">Examples: "123 MAIN ST", "01001234567000", "SMITH"</p>
         </form>
+    </div>
+
+    <div id="bookmarks-section" class="card bookmarks-section" style="display: none;">
+        <details>
+            <summary>Bookmarks</summary>
+            <div class="recent-list" id="bookmarks-list"></div>
+        </details>
+    </div>
+
+    <div id="recent-viewed" class="card" style="display: none;">
+        <details>
+            <summary>Recently Viewed <span class="recent-clear" onclick="clearRecentProperties(); event.stopPropagation();">Clear</span></summary>
+            <div class="recent-list" id="recent-list"></div>
+        </details>
     </div>
 
     {{if .Error}}
@@ -227,6 +293,7 @@
     <div class="card">
         <h2>{{.Property.Address}}, {{.Property.City}}, {{.Property.State}} {{.Property.Zip}}
             <a class="map-link" href="https://www.google.com/maps/search/?api=1&query={{.Property.Address}},+{{.Property.City}},+{{.Property.State}}+{{.Property.Zip}}" target="_blank" title="View on Google Maps">&#x1F5FA;</a>
+            <button class="bookmark-btn" id="bookmark-btn" onclick="toggleBookmark()" title="Add to bookmarks">&#9734;</button>
         </h2>
 
         <!-- Identification -->
@@ -1073,5 +1140,155 @@
         <p>Data includes records from 1990 to {{.EndDate}}</p>
         <p><a href="https://github.com/rssnyder/polk-county-iowa-property-serch">Source on GitHub</a></p>
     </footer>
+
+    <script>
+    const STORAGE_KEY = 'polk_properties';
+    const MAX_RECENT = 10;
+
+    function getStoredProperties() {
+        try {
+            return JSON.parse(localStorage.getItem(STORAGE_KEY)) || { recent: [], bookmarked: [] };
+        } catch (e) {
+            return { recent: [], bookmarked: [] };
+        }
+    }
+
+    function saveStoredProperties(data) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    }
+
+    function addRecentProperty(property) {
+        const data = getStoredProperties();
+        data.recent = data.recent.filter(p => p.dp !== property.dp);
+        data.recent.unshift(property);
+        if (data.recent.length > MAX_RECENT) data.recent = data.recent.slice(0, MAX_RECENT);
+        saveStoredProperties(data);
+    }
+
+    function clearRecentProperties() {
+        const data = getStoredProperties();
+        data.recent = [];
+        saveStoredProperties(data);
+        renderRecentProperties();
+    }
+
+    function isBookmarked(dp) {
+        const data = getStoredProperties();
+        return data.bookmarked.some(p => p.dp === dp);
+    }
+
+    function toggleBookmark() {
+        const dp = "{{if .Property}}{{.Property.DP}}{{end}}";
+        if (!dp) return;
+
+        const data = getStoredProperties();
+        const existing = data.bookmarked.findIndex(p => p.dp === dp);
+
+        if (existing >= 0) {
+            data.bookmarked.splice(existing, 1);
+        } else {
+            data.bookmarked.unshift({
+                dp: dp,
+                address: "{{if .Property}}{{.Property.Address}}{{end}}",
+                city: "{{if .Property}}{{.Property.City}}{{end}}",
+                type: "{{.PropType}}",
+                timestamp: Date.now()
+            });
+        }
+
+        saveStoredProperties(data);
+        updateBookmarkButton(dp);
+        renderBookmarks();
+    }
+
+    function removeBookmark(dp, event) {
+        event.preventDefault();
+        event.stopPropagation();
+        const btn = event.target;
+
+        if (btn.classList.contains('confirm')) {
+            const data = getStoredProperties();
+            data.bookmarked = data.bookmarked.filter(p => p.dp !== dp);
+            saveStoredProperties(data);
+            renderBookmarks();
+            updateBookmarkButton(dp);
+        } else {
+            document.querySelectorAll('.remove-btn.confirm').forEach(b => {
+                b.classList.remove('confirm');
+                b.innerHTML = '&times;';
+            });
+            btn.classList.add('confirm');
+            btn.innerHTML = '?';
+            setTimeout(() => {
+                if (btn.classList.contains('confirm')) {
+                    btn.classList.remove('confirm');
+                    btn.innerHTML = '&times;';
+                }
+            }, 3000);
+        }
+    }
+
+    function updateBookmarkButton(dp) {
+        const btn = document.getElementById('bookmark-btn');
+        if (!btn) return;
+        const bookmarked = isBookmarked(dp);
+        btn.innerHTML = bookmarked ? '&#9733;' : '&#9734;';
+        btn.classList.toggle('bookmarked', bookmarked);
+        btn.title = bookmarked ? 'Remove from bookmarks' : 'Add to bookmarks';
+    }
+
+    function renderBookmarks() {
+        const data = getStoredProperties();
+        const container = document.getElementById('bookmarks-section');
+        const list = document.getElementById('bookmarks-list');
+
+        if (data.bookmarked.length === 0) {
+            container.style.display = 'none';
+            return;
+        }
+
+        container.style.display = 'block';
+        list.innerHTML = data.bookmarked.map(p =>
+            `<a href="/?dp=${p.dp}&type=${p.type}" class="recent-item bookmarked">
+                <span class="recent-address">${p.address}</span>
+                <span class="recent-city">${p.city}</span>
+                <button class="remove-btn" onclick="removeBookmark('${p.dp}', event)" title="Remove">&times;</button>
+            </a>`
+        ).join('');
+    }
+
+    function renderRecentProperties() {
+        const data = getStoredProperties();
+        const container = document.getElementById('recent-viewed');
+        const list = document.getElementById('recent-list');
+
+        if (data.recent.length === 0) {
+            container.style.display = 'none';
+            return;
+        }
+
+        container.style.display = 'block';
+        list.innerHTML = data.recent.map(p =>
+            `<a href="/?dp=${p.dp}&type=${p.type}" class="recent-item">
+                <span class="recent-address">${p.address}</span>
+                <span class="recent-city">${p.city}</span>
+            </a>`
+        ).join('');
+    }
+
+    {{if .Property}}
+    addRecentProperty({
+        dp: "{{.Property.DP}}",
+        address: "{{.Property.Address}}",
+        city: "{{.Property.City}}",
+        type: "{{.PropType}}",
+        timestamp: Date.now()
+    });
+    updateBookmarkButton("{{.Property.DP}}");
+    {{end}}
+
+    renderBookmarks();
+    renderRecentProperties();
+    </script>
 </body>
 </html>
